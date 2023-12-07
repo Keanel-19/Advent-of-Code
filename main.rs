@@ -19,15 +19,16 @@ let mut total = 0;
         let caps = reg.captures(line).unwrap();
         let game: u32 = caps.get(1).unwrap().as_str().parse().unwrap();
         
-        if reg2.captures_iter(line)
-        .all(|c| match (c.get(2).unwrap().as_str(), c.get(1).unwrap().as_str().parse::<u32>().unwrap()) {
-            ("red",v) => v<=12,
-            ("green",v) => v<=13,
-            ("blue",v) => v<=14,
-            _ => true
-        }) {
-            total += game
-        }
+        let mut trip = (0,0,0);
+        
+        for c in reg2.captures_iter(line) {
+            match (c.get(2).unwrap().as_str(), c.get(1).unwrap().as_str().parse::<u32>().unwrap()) {
+            ("red",v) => if (v > trip.0) {trip.0 = v},
+            ("green",v) => if (v > trip.1) {trip.1 = v},
+            ("blue",v) => if (v > trip.2) {trip.2 = v},
+            _ => ()
+        }}
+        total += trip.0*trip.1*trip.2
     }
     println!("{}",total)
 }
