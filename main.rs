@@ -9,31 +9,61 @@ fn read_input() -> Vec<String> {
        .collect()
 }
 
+#[derive(Debug)]
+struct Hand {
+    bid: u32,
+    t: u32,
+    cards: [usize;5]
+}
+
 fn main(){
-    let mut total = 1;
+    //let mut total = 1;
+    let cards = "23456789TJQKA";
     let text = read_input();
-    let reg = Regex::new(r"\d+").unwrap();
+    let reg = Regex::new(r"(.+) (\d+)").unwrap();
     
-    let times:Vec<f64> = reg.find_iter(&text[0]).map(|m| m.as_str().parse().unwrap()).collect();
-    
-    let dists:Vec<f64> = reg.find_iter(&text[1]).map(|m| m.as_str().parse().unwrap()).collect();
-    println!("{:?}", times);
-    println!("{:?}", dists);
-    
-    for i in 0..times.len() {
-        let t = times[i];
-        let d = dists[i];
-        let delta = t*t -4.*d;
+    let mut hands:Vec<Hand> = Vec::new();
+    for line in text.iter() {
+        let cap = reg.captures(line).unwrap();
+        //println!("{:?} {:?}",&cap[1],&cap[2]);
         
-        let r1 = t/2.-delta.sqrt()/2.;
-        let r2 = t/2.+delta.sqrt()/2.;
+        let mut h = Hand{
+            bid: cap[2].parse().unwrap(),
+            t: 0,
+            cards: cap[1].chars().map(|c| cards.find(c).unwrap()).collect::<Vec<usize>>().as_slice().try_into().unwrap()
+        };
         
-        let i1 : u32 = (r1+1.).floor() as u32;
-        let i2 : u32 = (r2-1.).ceil() as u32;
+        let mut count = [0;13];
+        for c in h.cards.iter() {
+            count[*c] += 1;
+        };
         
-        total *= i2 - i1 + 1;
+        count.sort();
+        
+        h.t = match (count[12],count[11]) {
+            (5,_) => 6,
+            (4,_) => 5,
+            (3,2) => 4,
+            (3,_) => 3,
+            (2,2) => 2,
+            (2,_) => 1,
+            _ => 0
+        };
+        
+        hands.push(h);
+        
     }
+    //println!("{:?}",hands);
     
+    hands.sort_by(|h,g| h.t.cmp(&g.t)
+    .then(h.cards[0].cmp(&g.cards[0]))
+    .then(h.cards[1].cmp(&g.cards[1]))
+    .then(h.cards[2].cmp(&g.cards[2]))
+    .then(h.cards[3].cmp(&g.cards[3]))
+    .then(h.cards[4].cmp(&g.cards[4]))
+    );
+    
+    let total:u32= hands.iter().enumerate().map(|(i,h)| (i as u32+1)*h.bid).sum();
     println!("{}", total)
     
 }
