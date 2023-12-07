@@ -1,6 +1,12 @@
 use std::fs::read_to_string;
 use regex::Regex;
 
+#[derive(Debug)]
+struct Rel {
+    from: u64,
+    to: u64,
+    len: u64
+}
 
 fn read_input() -> Vec<String> {
     read_to_string("input")
@@ -12,23 +18,56 @@ fn read_input() -> Vec<String> {
 
 fn main(){
     let mut total =0;
-    let reg = Regex::new(r"^Card +\d+:([ \d]+)\|([ \d]+)$").unwrap();
-    let reg2 = Regex::new(r"\d+").unwrap();
+    let text = read_input();
+    let reg = Regex::new(r"^.+:$").unwrap();
     
-    let cards = read_input();
-    let mut quantity = vec![1; cards.len()];
+    let i_maps:Vec<usize> = (0..text.len()).filter(|i| reg.is_match(&text[*i])).map(|i| i+1).collect();
     
-    for i in 0..cards.len() {
-        let line = &cards[i];
-        let caps = reg.captures(line).unwrap();
-        let targets : Vec<u32> = reg2.find_iter(&caps[1]).map(|s| s.as_str().parse().unwrap()).collect();
-        let winning_count = reg2.find_iter(&caps[2]).map(|s| s.as_str().parse::<u32>().unwrap()).filter(|n| targets.contains(n)).count();
-        for j in 0..winning_count {
-            quantity[i+1+j] += quantity[i]
+    println!("{:?}", i_maps);
+    
+    let reg = Regex::new(r"\d+").unwrap();
+    let mut seeds : Vec<u64>= reg.find_iter(&text[0]).map(|m| m.as_str().parse().unwrap()).collect();
+    seeds.sort();
+    
+    println!("{:?}", seeds);
+    
+    let reg2 = Regex::new(r"(\d+) (\d+) (\d+)").unwrap();
+    for i in i_maps.iter() {
+        let mut j = 0;
+        let mut map : Vec<Rel> = Vec::new();
+        while i+j < text.len() && reg2.is_match(&text[i+j]) {
+            let cap = reg2.captures(&text[i+j]).unwrap();
+            let (_, rel): (&str, [&str; 3]) = cap.extract();
+            let rel: Vec<u64> = rel.iter().map(|s| s.parse().unwrap()).collect();
+            map.push(Rel{from:rel[1],to:rel[0],len:rel[2]});
+            j += 1;
         }
+        map.sort_by(|r1,r2| r1.from.cmp(&r2.from));
+        
+        println!("{:?}",map);
+        
+        let mut iseed = 0;
+        let mut irel = 0;
+        
+        while iseed < seeds.len() && irel < map.len() {
+            let s = seeds[iseed];
+            let r = &map[irel];
+            
+            if s < r.from {
+                iseed+=1;
+            } else if s >= r.from+r.len {
+                irel += 1;
+            } else {
+                seeds[iseed] = s+r.to-r.from;
+                iseed +=1;
+            }
+        }
+        seeds.sort();
+        
+        println!("{:?}", seeds);
     }
-    
-    total = quantity.iter().sum();
+    println!("{:?}", seeds);
+    total = seeds[0];
     println!("{}", total)
     
 }
