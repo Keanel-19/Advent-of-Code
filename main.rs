@@ -3,9 +3,9 @@ use regex::Regex;
 
 #[derive(Debug)]
 struct Rel {
-    from: u64,
-    to: u64,
-    len: u64
+    from: u32,
+    to: u32,
+    len: u32
 }
 
 fn read_input() -> Vec<String> {
@@ -17,19 +17,19 @@ fn read_input() -> Vec<String> {
 }
 
 fn main(){
-    let mut total =0;
+    //let mut total =0;
     let text = read_input();
     let reg = Regex::new(r"^.+:$").unwrap();
     
     let i_maps:Vec<usize> = (0..text.len()).filter(|i| reg.is_match(&text[*i])).map(|i| i+1).collect();
     
-    println!("{:?}", i_maps);
+    //println!("{:?}", i_maps);
     
     let reg = Regex::new(r"\d+").unwrap();
-    let mut seeds : Vec<u64>= reg.find_iter(&text[0]).map(|m| m.as_str().parse().unwrap()).collect();
+    let mut seeds : Vec<u32>= reg.find_iter(&text[0]).map(|m| m.as_str().parse().unwrap()).collect();
     seeds.sort();
     
-    println!("{:?}", seeds);
+    //println!("{:?}", seeds);
     
     let reg2 = Regex::new(r"(\d+) (\d+) (\d+)").unwrap();
     for i in i_maps.iter() {
@@ -38,13 +38,13 @@ fn main(){
         while i+j < text.len() && reg2.is_match(&text[i+j]) {
             let cap = reg2.captures(&text[i+j]).unwrap();
             let (_, rel): (&str, [&str; 3]) = cap.extract();
-            let rel: Vec<u64> = rel.iter().map(|s| s.parse().unwrap()).collect();
+            let rel: Vec<u32> = rel.iter().map(|s| s.parse().unwrap()).collect();
             map.push(Rel{from:rel[1],to:rel[0],len:rel[2]});
             j += 1;
         }
         map.sort_by(|r1,r2| r1.from.cmp(&r2.from));
         
-        println!("{:?}",map);
+        //println!("{:?}",map);
         
         let mut iseed = 0;
         let mut irel = 0;
@@ -55,19 +55,19 @@ fn main(){
             
             if s < r.from {
                 iseed+=1;
-            } else if s >= r.from+r.len {
+            } else if s-r.from >= r.len {
                 irel += 1;
             } else {
-                seeds[iseed] = s+r.to-r.from;
+                seeds[iseed] = s-r.from+r.to;
                 iseed +=1;
             }
         }
         seeds.sort();
         
-        println!("{:?}", seeds);
+        //println!("{:?}", seeds);
     }
-    println!("{:?}", seeds);
-    total = seeds[0];
+    //println!("{:?}", seeds);
+    let total = seeds[0];
     println!("{}", total)
     
 }
