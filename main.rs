@@ -18,7 +18,7 @@ struct Hand {
 
 fn main(){
     //let mut total = 1;
-    let cards = "23456789TJQKA";
+    let cards = "J23456789TQKA";
     let text = read_input();
     let reg = Regex::new(r"(.+) (\d+)").unwrap();
     
@@ -37,10 +37,13 @@ fn main(){
         for c in h.cards.iter() {
             count[*c] += 1;
         };
+        let joker = count[0];
+        let mut ncount = [0;12];
+        ncount.copy_from_slice(&count[1..]);
         
-        count.sort();
+        ncount.sort();
         
-        h.t = match (count[12],count[11]) {
+        h.t = match (ncount[11]+joker,ncount[10]) {
             (5,_) => 6,
             (4,_) => 5,
             (3,2) => 4,
