@@ -19,6 +19,29 @@ fn find_ref(v: &Vec<u64>) -> usize {
     0
 }
 
+fn find_almost(v: &Vec<u64>,max: u32) -> usize {
+    for err in 0..max {
+        let mask = 1<<err;
+        'center: for c in 1..v.len() {
+            let len = if c < v.len()-c {c} else {v.len()-c};
+            let mut bump = 0;
+            for i in 0..len {
+                let a = v[c-1-i];
+                let b = v[c+i];
+                let cmp = a^b;
+                bump += (cmp&mask)>>err;
+                if cmp-(cmp&mask)!=0 {
+                    continue 'center
+                }
+            }
+            if bump == 1 {
+                return c
+            }
+        }
+    }
+    0
+}
+
 fn main(){
     let mut total = 0;
     let text = read_input();
@@ -50,7 +73,7 @@ fn main(){
             }
         }
         
-        total += find_ref(&cols) + 100*find_ref(&rows);
+        total += find_almost(&cols,grid.len() as u32) + 100*find_almost(&rows,grid[0].len() as u32);
         
         //println!("{:?} {:?}",rows,cols)
     }
