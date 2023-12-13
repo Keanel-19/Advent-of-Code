@@ -10,19 +10,65 @@ fn read_input() -> Vec<String> {
 }
 
 #[derive(PartialEq,Clone,Copy,Debug)]
-enum State {
+enum Spring {
     Good,
-    Bad
+    Bad,
+    Both
+}
+use Spring::{Good,Bad,Both};
+
+fn calculate(spr: &Vec<Spring>, pat: &Vec<usize>) -> u64 {
+    let mut mem = vec![vec![None;pat.len()];spr.len()];
+    
+    fn can_pose(spr: &Vec<Spring>, from: usize, l: usize) -> bool {
+        for i in from..from+l {
+            if !(i < spr.len() && spr[i]!=Good) {
+                return false
+            }
+        }
+        if from+l < spr.len() && spr[from+l]==Bad {
+            return false
+        }
+        true
+    }
+    
+    fn walk(mem: &mut Vec<Vec<Option<u64>>> ,spr: &Vec<Spring>, pat: &Vec<usize>, i: usize, j: usize) -> u64 {
+        if i < spr.len() && j < pat.len() {
+            let m = mem[i][j];
+            if m.is_some() {
+                return m.unwrap()
+            }
+            let m = match spr[i] {
+                Good => walk(mem,spr,pat,i+1,j),
+                Bad => if can_pose(spr,i,pat[j]) {
+                    walk(mem,spr,pat,i+pat[j]+1,j+1)
+                } else {
+                    0
+                },
+                Both => (if can_pose(spr,i,pat[j]) {
+                    walk(mem,spr,pat,i+pat[j]+1,j+1)
+                } else {
+                    0
+                }) + walk(mem,spr,pat,i+1,j)
+            };
+            mem[i][j] = Some(m);
+            m
+        } else if j >= pat.len() {
+            for a in i..spr.len() {
+                if spr[a] == Bad {
+                    return 0
+                }
+            }
+            1
+        } else {
+            0
+        }
+    }
+    
+    walk(&mut mem,&spr,&pat,0,0)
 }
 
-use State::{Good,Bad};
-
-#[derive(PartialEq,Clone,Copy,Debug)]
-enum Data {
-    Fixed(State),
-    Unfixed
-}
-use Data::{Fixed,Unfixed};
+//format!("{0}#{0}#{0}#{0}#{0}",&cap[1])
 
 fn main(){
     let mut total = 0;
@@ -32,106 +78,20 @@ fn main(){
     for line in text.iter() {
         let cap = reg.captures(line).unwrap();
         
-        let init_states: Vec<Data> = cap[1].chars().map(|c| match c {
-            '.' => Fixed(Good),
-            '#' => Fixed(Bad),
-            '?' => Unfixed,
+        let init_states: Vec<Spring> = format!("{0}?{0}?{0}?{0}?{0}",&cap[1]).chars().map(|c| match c {
+            '.' => Good,
+            '#' => Bad,
+            '?' => Both,
             _ => panic!()
         }).collect();
         //println!("{:?}",init_states);
         
-        let groups: Vec<u32> = cap[2].split(',').map(|s| s.parse().unwrap()).chain([0]).collect();
+        let groups: Vec<usize> = format!("{0},{0},{0},{0},{0}",&cap[2]).split(',').map(|s| s.parse().unwrap()).collect();
         //println!("{:?}",groups);
         
-        let mut total_bad = groups.iter().sum::<u32>() as i32 - init_states.iter().filter(|s| **s == Fixed(Bad)).count() as i32;
-        
-        let mut total_good = init_states.iter().filter(|s| **s == Unfixed).count() as i32 - total_bad;
-        
-        //println!("good :{} bad :{}",total_good,total_bad);
-        
-        let mut states = vec![];
-        let mut count = vec![0;groups.len()];
-        let mut i = 0;
-        let mut gi = 0;
-        let mut guess = Bad;
-        let mut back = false;
-        let mut subtot = 0;
-        
-        loop {
-            //println!("{:?}",states);
-            if !back {
-                states.push(match init_states[i] {
-                    Fixed(x) => x,
-                    Unfixed => {
-                        if guess == Good {
-                            total_good -= 1
-                        } else {
-                            total_bad -= 1
-                        }
-                        guess
-                    }
-                });
-                match states[i] {
-                    Bad => count[gi]+=1,
-                    Good => if count[gi] > 0 {
-                        if count[gi]==groups[gi] {
-                            gi +=1
-                        } else {
-                            back = true
-                        }
-                    }
-                }
-                
-                if total_bad < 0 || total_good < 0 || count[gi]>groups[gi] {
-                    back=true
-                }
-                if !back {
-                    i+=1;
-                    guess= Bad
-                }
-            } else {
-                let state_tried = states.pop().unwrap();
-                back = match (init_states[i],state_tried) {
-                    (Fixed(_),_) => true,
-                    (Unfixed,Good) => {
-                        total_good+=1;
-                        true
-                    },
-                    (Unfixed,Bad) => {
-                        total_bad+=1;
-                        guess=Good;
-                        false
-                    }
-                };
-                match state_tried {
-                    Good => (),
-                    Bad => {
-                        if 0<count[gi] {
-                            count[gi]-=1;
-                        } else {
-                            gi -= 1;
-                            count[gi] -=1;
-                        }
-                    }
-                }
-                if back {
-                    if 0 < i {
-                        i-=1
-                    } else {
-                        break
-                    }
-                }
-            }
-            
-            if i >= init_states.len() && !back {
-                //println!("find : {:?}",states);
-                subtot += 1;
-                i -= 1;
-                back = true;
-            }
-        }
-        //println!("{}",subtot);
-        total += subtot;
+        let subtot = calculate(&init_states,&groups);
+        total+=subtot;
+        //println!("{}",subtot)
     }
     
     println!("{}",total)
