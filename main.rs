@@ -1,4 +1,6 @@
 use std::fs::read_to_string;
+use std::collections::VecDeque;
+
 //use regex::Regex;
 
 fn read_input() -> Vec<String> {
@@ -9,15 +11,7 @@ fn read_input() -> Vec<String> {
        .collect()
 }
 
-#[derive(Clone,Copy)]
-enum Rock {
-    Ball,
-    Wall,
-    Space
-}
-use Rock::{Ball,Wall,Space};
-
-#[derive(Clone,Copy)]
+#[derive(Clone,Copy,Debug)]
 enum Orient {
     North,
     South,
@@ -26,113 +20,122 @@ enum Orient {
 }
 use Orient::{North,South,East,West};
 
-fn len(grid: &Vec<Vec<Rock>>,dir: Orient) -> usize {
-    match dir {
-        North|South => grid.len(),
-        East|West => grid[0].len()
+impl Orient {
+    fn depl(&self, c: (usize,usize)) -> Option<(usize,usize)> {
+        match self {
+            North => if c.0 > 0 {
+                Some((c.0-1,c.1))
+            } else {
+                None
+            },
+            South => Some((c.0+1,c.1)),
+            West => if c.1 > 0 {
+                Some((c.0,c.1-1))
+            } else {
+                None
+            },
+            East => Some((c.0,c.1+1))
+        }
     }
-}
-
-fn len_row(grid: &Vec<Vec<Rock>>,dir: Orient) -> usize {
-    match dir {
-        North|South => grid[0].len(),
-        East|West => grid.len()
+    
+    fn get_mark(&self, m: &(bool,bool,bool,bool)) -> bool {
+        match self {
+            North => m.0,
+            South => m.1,
+            East => m.2,
+            West => m.3
+        }
     }
-}
-
-fn get(grid: &Vec<Vec<Rock>>,dir: Orient,i: usize, j: usize) -> Rock {
-    let l = len(grid,dir);
-    let lr = len_row(grid,dir);
-    match dir {
-        North => grid[i][j],
-        South => grid[l-i-1][lr-j-1],
-        East => grid[lr-j-1][l-i-1],
-        West => grid[j][i]
-    }
-}
-
-fn set(grid: &mut Vec<Vec<Rock>>,dir: Orient,i: usize, j: usize,v: Rock) {
-    let l = len(grid,dir);
-    let lr = len_row(grid,dir);
-    match dir {
-        North => grid[i][j] = v,
-        South => grid[l-i-1][lr-j-1] = v,
-        East => grid[lr-j-1][l-i-1] = v,
-        West => grid[j][i] = v
-    }
-}
-
-fn tilt(grid: &mut Vec<Vec<Rock>>,dir: Orient) {
-    let lr = len_row(grid,dir);
-    let l = len(grid,dir);
-    for j in 0..lr {
-        let mut row = 0;
-        for i in 0..l {
-            row = match get(grid,dir,i,j) {
-                Ball => {
-                    set(grid,dir,i,j,Space);
-                    set(grid,dir,row,j,Ball);
-                    row+1
-                },
-                Wall => i+1,
-                Space => row
-            }
+    
+    fn set_mark(&self, m: &mut (bool,bool,bool,bool)) {
+        match self {
+            North => m.0 = true,
+            South => m.1 = true,
+            East => m.2 = true,
+            West => m.3 = true
         }
     }
 }
 
-fn count(grid: & Vec<Vec<Rock>>,dir: Orient) -> usize{
-    let lr = len_row(grid,dir);
-    let l = len(grid,dir);
-    let mut total = 0;
-    for j in 0..lr {
-        for i in 0..l {
-            total += match get(grid,dir,i,j) {
-                Ball => l-i,
-                _ => 0
-            }
-        }
+
+fn act(c: char, o: Orient) -> Vec<Orient>{
+    match c {
+        '-' => match o {
+            North|South => vec![East,West],
+            o => vec![o]
+        },
+        '|' => match o {
+            East|West => vec![North,South],
+            o => vec![o]
+        },
+        '/' => match o {
+            North => vec![East],
+            South => vec![West],
+            East => vec![North],
+            West => vec![South],
+        },
+        '\\' => match o {
+            North => vec![West],
+            South => vec![East],
+            East => vec![South],
+            West => vec![North],
+        },
+        '.' => vec![o],
+        _ => panic!()
     }
-    total
 }
+
 
 fn main(){
-    //let mut total = 0;
+    let mut total:u32 = 0;
     let text = read_input();
-    //let reg = Regex::new(r"([.#?]+) ([\d,]+)").unwrap();
+    //let reg = Regex::new(r"(\w+)(-|=)(\d?)").unwrap();
     
-    let mut grid: Vec<Vec<Rock>> = text.into_iter().map(|s| s.chars().map(|c| match c {
-        'O'=> Ball,
-        '#' => Wall,
-        '.'=> Space,
-        _=> panic!()
-    }).collect()).collect();
-    //println!("{}*{}={}",grid.len(),grid[0].len(),grid.len()*grid[0].len());
+    let layout: Vec<Vec<char>> = text.iter().map(|s| s.chars().collect()).collect();
     
-    let cycle = 1000000000;
-    
-    let mut hist = vec![];
-    let mut start_loop = 0;
-    let mut reminder = 0;
-    for l in 0..cycle{
-        for dir in [North,West,South,East].into_iter() {
-            tilt(&mut grid, dir);
+    for first_o in [North,South,East,West] {
+        let b_sup = match first_o {
+            North|South => layout[0].len(),
+            _ => layout.len()
+        };
+        for first_c in (0..b_sup).map(|i| match first_o {
+            South => (0,i),
+            North => (layout.len()-1,i),
+            East => (i,0),
+            West => (i,layout[0].len()-1),
+        }) {
+            let mut mark = vec![vec![(false,false,false,false);layout[0].len()];layout.len()];
+            let mut front = VecDeque::from([(first_c,first_o)]);
+            East.set_mark(&mut mark[first_c.0][first_c.1]);
+            //println!("{:?}",front[0]);
+            
+            while front.len() > 0 {
+                let (coor,orient) = front.pop_front().unwrap();
+                let orients = act(layout[coor.0][coor.1],orient);
+                
+                for o in orients.into_iter() {
+                    if let Some(c) = o.depl(coor) {
+                        if c.0 < layout.len() && c.1 < layout[0].len() && !o.get_mark(&mark[c.0][c.1]) {
+                            o.set_mark(&mut mark[c.0][c.1]);
+                            front.push_back((c,o));
+                        }
+                    }
+                }
+            }
+            
+            /*
+            for r in mark.iter() {
+                let mut s = String::new();
+                for t in r.iter() {
+                    s.push(if t.0||t.1||t.2||t.3 {'#'} else {'.'});
+                }
+                println!("{}",&s);
+            }*/
+            let score = mark.iter().map(|r| r.iter().map(|t| if t.0||t.1||t.2||t.3 {1} else {0}).sum::<u32>()).sum();
+            
+            total = if total<score {score} else {total};
         }
-        let h = (count(&grid,North),count(&grid,West));
-        match hist.iter().position(|e| *e==h) {
-            Some(i) => {
-                start_loop = i;
-                reminder = cycle-l-1;
-                break
-            },
-            None => hist.push(h)
-        }
-        //println!("{}: {} {}",l,count(&grid,North));
     }
-    let ifin = start_loop + reminder%(hist.len()- start_loop);
-    let total = hist[ifin].0;
     
-    //println!("{:?}",hist);
-    //println!("{} {}",start_loop,ifin);
-    println!("{}",total)
+    println!("{:?}",total)
 }
