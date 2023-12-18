@@ -1,5 +1,6 @@
 use std::fs::read_to_string;
-use std::collections::VecDeque;
+use std::collections::BinaryHeap;
+use std::cmp::Ordering;
 
 //use regex::Regex;
 
@@ -11,7 +12,7 @@ fn read_input() -> Vec<String> {
        .collect()
 }
 
-#[derive(Clone,Copy,Debug)]
+#[derive(Clone,Copy,Debug,Eq,PartialEq)]
 enum Orient {
     North,
     South,
@@ -38,50 +39,58 @@ impl Orient {
         }
     }
     
-    fn get_mark(&self, m: &(bool,bool,bool,bool)) -> bool {
+    fn i(&self) -> usize {
         match self {
-            North => m.0,
-            South => m.1,
-            East => m.2,
-            West => m.3
+            North => 0,
+            South => 1,
+            West => 2,
+            East => 3
         }
     }
     
-    fn set_mark(&self, m: &mut (bool,bool,bool,bool)) {
-        match self {
-            North => m.0 = true,
-            South => m.1 = true,
-            East => m.2 = true,
-            West => m.3 = true
-        }
+    fn turn_back(&self, other: Self) -> bool {
+        *self == North && other == South || *self == South && other == North || *self == East && other == West || *self == West && other == East
     }
 }
 
 
-fn act(c: char, o: Orient) -> Vec<Orient>{
-    match c {
-        '-' => match o {
-            North|South => vec![East,West],
-            o => vec![o]
-        },
-        '|' => match o {
-            East|West => vec![North,South],
-            o => vec![o]
-        },
-        '/' => match o {
-            North => vec![East],
-            South => vec![West],
-            East => vec![North],
-            West => vec![South],
-        },
-        '\\' => match o {
-            North => vec![West],
-            South => vec![East],
-            East => vec![South],
-            West => vec![North],
-        },
-        '.' => vec![o],
-        _ => panic!()
+#[derive(Clone,Copy,Debug,Eq,PartialEq)]
+struct State {
+    p: (usize,usize),
+    o: Orient,
+    n: usize
+}
+
+
+#[derive(Clone,Copy,Debug)]
+struct HeapWrap {
+    state: State,
+    score: u32
+}
+
+
+fn weight(s: State, w: u32) -> i64 {
+    w as i64 - s.p.0 as i64 - s.p.1 as i64
+}
+
+
+impl PartialEq for HeapWrap {
+    fn eq(&self, other: &Self) -> bool {
+        weight(self.state,self.score) == weight(other.state,other.score)
+    }
+}
+
+impl Eq for HeapWrap {}
+
+impl Ord for HeapWrap {
+    fn cmp(&self, other: &Self) -> Ordering {
+        weight(other.state,other.score).cmp(&weight(self.state,self.score))
+    }
+}
+
+impl PartialOrd for HeapWrap {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -91,49 +100,50 @@ fn main(){
     let text = read_input();
     //let reg = Regex::new(r"(\w+)(-|=)(\d?)").unwrap();
     
-    let layout: Vec<Vec<char>> = text.iter().map(|s| s.chars().collect()).collect();
+    let grid: Vec<Vec<u32>> = text.iter().map(|s| s.chars().map(|c| c.to_digit(10).unwrap()).collect()).collect();
+    let goal = (grid.len()-1,grid[0].len()-1);
     
-    for first_o in [North,South,East,West] {
-        let b_sup = match first_o {
-            North|South => layout[0].len(),
-            _ => layout.len()
-        };
-        for first_c in (0..b_sup).map(|i| match first_o {
-            South => (0,i),
-            North => (layout.len()-1,i),
-            East => (i,0),
-            West => (i,layout[0].len()-1),
-        }) {
-            let mut mark = vec![vec![(false,false,false,false);layout[0].len()];layout.len()];
-            let mut front = VecDeque::from([(first_c,first_o)]);
-            East.set_mark(&mut mark[first_c.0][first_c.1]);
-            //println!("{:?}",front[0]);
-            
-            while front.len() > 0 {
-                let (coor,orient) = front.pop_front().unwrap();
-                let orients = act(layout[coor.0][coor.1],orient);
-                
-                for o in orients.into_iter() {
-                    if let Some(c) = o.depl(coor) {
-                        if c.0 < layout.len() && c.1 < layout[0].len() && !o.get_mark(&mark[c.0][c.1]) {
-                            o.set_mark(&mut mark[c.0][c.1]);
-                            front.push_back((c,o));
-                        }
-                    }
-                }
+    let mut costs: Vec<Vec<[[Option<u32>;11];4]>> = vec![vec![[[None;11];4];grid[0].len()];grid.len()];
+    
+    let mut heap = BinaryHeap::new();
+    
+    for i in 0..4 {
+        costs[0][0][i][0] = Some(0);
+    }
+    
+    heap.push(HeapWrap{state:State{p:(0,0),o:East,n:0},score:0});
+    
+    while let Some(HeapWrap {state, score}) = heap.pop() {
+        //println!("{:?} : {}",state, score);
+        if state.p == goal && state.n >= 4 {
+            total = score;
+            break
+        }
+        
+        if costs[state.p.0][state.p.1][state.o.i()][state.n].is_some() && score > costs[state.p.0][state.p.1][state.o.i()][state.n].unwrap() {
+            continue
+        }
+        
+        for o in [North,South,East,West] {
+            if o == state.o && state.n == 10 || o.turn_back(state.o) || o != state.o && state.n < 4 {
+                continue
             }
             
-            /*
-            for r in mark.iter() {
-                let mut s = String::new();
-                for t in r.iter() {
-                    s.push(if t.0||t.1||t.2||t.3 {'#'} else {'.'});
-                }
-                println!("{}",&s);
-            }*/
-            let score = mark.iter().map(|r| r.iter().map(|t| if t.0||t.1||t.2||t.3 {1} else {0}).sum::<u32>()).sum();
+            let p = o.depl(state.p);
+            if p.is_none() {
+                continue
+            }
+            let p = p.unwrap();
             
-            total = if total<score {score} else {total};
+            if p.0 < grid.len() && p.1 < grid[0].len() {
+                let n = if o == state.o {state.n+1} else {1};
+                let new_score = score + grid[p.0][p.1];
+                let old_s = costs[p.0][p.1][o.i()][n];
+                if old_s.is_none() || new_score < old_s.unwrap() {
+                    costs[p.0][p.1][o.i()][n] = Some(new_score);
+                    heap.push(HeapWrap{state:State{p,o,n},score:new_score});
+                }
+            }
         }
     }
     
