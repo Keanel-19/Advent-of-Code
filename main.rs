@@ -1,4 +1,5 @@
 use std::fs::read_to_string;
+use std::collections::HashMap;
 use regex::Regex;
 
 fn read_input() -> Vec<String> {
@@ -10,51 +11,110 @@ fn read_input() -> Vec<String> {
 }
 
 
+#[derive(Clone,Copy,Debug)]
+struct Gear {
+    x: u32,
+    m: u32,
+    a: u32,
+    s: u32
+}
+
+impl Gear {
+    fn sum(&self) -> u32 {
+        self.x+self.m+self.a+self.s
+    }
+}
+
+#[derive(Clone,Debug)]
+enum Rule {
+    Sup(String,u32),
+    Inf(String,u32),
+    Always
+}
+use Rule::{Sup,Inf,Always};
+
+
+impl Rule {
+    fn test(&self,g:Gear) -> bool {
+        match self {
+            Sup(s,v) => match s.as_str() {
+                "x" => g.x>*v,
+                "m" => g.m>*v,
+                "a" => g.a>*v,
+                "s" => g.s>*v,
+                _ => panic!()
+            },
+            Inf(s,v) => match s.as_str() {
+                "x" => g.x<*v,
+                "m" => g.m<*v,
+                "a" => g.a<*v,
+                "s" => g.s<*v,
+                _ => panic!()
+            },
+            Always => true
+        }
+    }
+}
+
+
 fn main(){
-    let mut total:i128 = 0;
+    let mut total = 0;
     let text = read_input();
-    let reg = Regex::new(r"#([0-9a-f]{5})(\d)").unwrap();
-    let reg2 = Regex::new(r"(\w) (\d+) .+").unwrap();
+    let reg_rule = Regex::new(r"^(\w+)\{(.+)\}$").unwrap();
+    let reg_act = Regex::new(r"(?:(\w+)([<>])(\d+):)?(\w+)").unwrap();
     
-    let mut points = vec![(0,0)];
+    let reg_gear = Regex::new(r"^\{(.+)\}$").unwrap();
+    let reg_att = Regex::new(r"([xmas])=(\d+)").unwrap();
     
-    for line in text.iter() {
-        let cap = reg.captures(line).unwrap();
-        
-        let dir = (match &cap[2] {
-            "0" => "R",
-            "1" => "D",
-            "2" => "L",
-            "3" => "U",
-            _ => panic!()
-        }).to_string();
-        let len: i128 = i128::from_str_radix(&cap[1],16).unwrap();
-        /*
-        let dir = cap[1].to_string();
-        let len: i128 = i128::from_str_radix(&cap[2],10).unwrap();
-        
-        println!("{} {}",dir,len);
-        */
-        
-        total += len;
-        let p = points[points.len()-1];
-        points.push((match dir.as_str() {
-            "U" => p.0 - len,
-            "D" => p.0 + len,
-            _ => p.0
-        },match dir.as_str() {
-            "R" => p.1 + len,
-            "L" => p.1 - len,
-            _ => p.1
-        }));
-    }
-    //println!("{:?}",points);
-    points.pop();
+    let mut rules = HashMap::new();
+    let mut gears = vec![];
     
-    for i in 0..points.len() {
-        let j = (i+1)%points.len();
-        total -= points[i].0*points[j].1 - points[j].0*points[i].1;
+    for l in text.iter() {
+        if let Some(cap) = reg_rule.captures(l) {
+            let name = cap[1].to_string();
+            rules.insert(cap[1].to_string(),vec![]);
+            for c in reg_act.captures_iter(&cap[2]) {
+                let r = match c.get(2).and_then(|m| Some(m.as_str())) {
+                    Some("<") => Inf(c[1].to_string(),c[3].parse::<u32>().unwrap()),
+                    Some(">") => Sup(c[1].to_string(),c[3].parse::<u32>().unwrap()),
+                    _ => Always
+                };
+                rules.get_mut(&name).unwrap().push((r,c[4].to_string()));
+            }
+        }
+        else if let Some(cap) = reg_gear.captures(l) {
+            let mut g = Gear{x:0,m:0,a:0,s:0};
+            for c in reg_att.captures_iter(&cap[1]) {
+                let v = c[2].parse::<u32>().unwrap();
+                match &c[1] {
+                    "x" => g.x = v,
+                    "m" => g.m = v,
+                    "a" => g.a = v,
+                    "s" => g.s = v,
+                    _ => panic!()
+                }
+            }
+            gears.push(g);
+        }
     }
     
-    println!("{}", total/2 +1)
+    
+    for g in gears.into_iter() {
+        let mut name = "in".to_string();
+        'l:loop {
+        for (r,s) in rules[&name].iter() {
+            if r.test(g) {
+                match s.as_str() {
+                    "A" => {
+                        total+=g.sum();
+                        break 'l
+                    },
+                    "R" => break 'l,
+                    _ => name = s.clone()
+                }
+                break
+            }
+        }}
+    }
+    println!("{}", total)
 }
