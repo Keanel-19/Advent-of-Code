@@ -96,11 +96,14 @@ fn main(){
         links.insert(name,l);
     }
     
+    
     let links = links;
     let mut htot = 0;
     let mut ltot = 0;
     
-    for _ in 0..1000 {
+    let beacon = ["qq","fj","vm","jc"];
+    
+    for push in 0..10000 {
         let mut process = VecDeque::from([("button".to_string(),Low,"broadcaster".to_string())]);
         let mut lcount= 0;
         let mut hcount =0;
@@ -110,6 +113,9 @@ fn main(){
             match sig {
                 Low => lcount+=1,
                 High => hcount += 1
+            }
+            if beacon.contains(&&em.as_str()) && sig==Low {
+                println!("{} {}",em,push+1)
             }
             let Some(sig) = mods.get_mut(&rec).unwrap().receive(sig,em) else {continue};
             let em = rec;
