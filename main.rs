@@ -1,6 +1,6 @@
 use std::fs::read_to_string;
-use std::collections::{BTreeMap,VecDeque};
-use regex::Regex;
+use std::collections::VecDeque;
+//use regex::Regex;
 
 fn read_input() -> Vec<String> {
     read_to_string("input")
@@ -11,122 +11,80 @@ fn read_input() -> Vec<String> {
 }
 
 #[derive(Clone,Copy,Debug,Eq,PartialEq)]
-enum Signal {
-    Low,
-    High
+enum Case {
+    Wall,
+    Blank,
+    Step(u32)
 }
-use Signal::{Low,High};
+use Case::{Wall,Blank,Step};
 
-
-#[derive(Clone,Debug)]
-enum Module {
-    Broadcast,
-    FlipFlop(bool),
-    Conj(BTreeMap<String,Signal>),
-    Blank
-}
-use Module::{Broadcast,FlipFlop,Conj,Blank};
-
-
-impl Module {
-    fn add_prec(&mut self, s: String) {
-        let Conj(h) = self else {return};
-        h.insert(s,Low);
-    }
+fn next_steps(g: &Vec<Vec<Case>>, i: usize, j: usize) -> Vec<(usize,usize)> {
+    let mut rep = vec!();
     
-    fn receive(&mut self, s: Signal, sender: String) -> Option<Signal> {
-        match self {
-            Blank => None,
-            Broadcast => Some(s),
-            FlipFlop(state) => match s {
-                High => None,
-                Low => {
-                    *state = !*state;
-                    if *state {
-                        Some(High)
-                    } else {
-                        Some(Low)
-                    }
-                }
-            },
-            Conj(state) => {
-                state.insert(sender,s);
-                if state.iter().all(|(_,s)| *s==High) {
-                    Some(Low)
-                } else {
-                    Some(High)
-                }
-            }
-        }
+    if 0 < i {
+        rep.push((i-1,j))
     }
+    if 0 < j {
+        rep.push((i,j-1))
+    }
+    if i+1 < g.len() {
+        rep.push((i+1,j))
+    }
+    if j+1 < g[0].len() {
+        rep.push((i,j+1))
+    }
+    rep
 }
 
+const NBSTEP:u32 = 64;
 
 fn main(){
-    //let mut total = 0;
+    let mut total = 0;
     let text = read_input();
-    let reg = Regex::new(r"^([%&]?)(\w+) -> (.+)$").unwrap();
+    //let reg = Regex::new(r"^([%&]?)(\w+) -> (.+)$").unwrap();
     
-    let mut mods = BTreeMap::new();
-    let mut temp = vec![];
-    for line in text.iter() {
-        let cap = reg.captures(line).unwrap();
-        let name = &cap[2];
-        temp.push((name.to_string(),cap[3].to_string()));
-        mods.insert(name.to_string(), match name {
-            "broadcaster" => Broadcast,
-            _ => match &cap[1] {
-                "%" => FlipFlop(false),
-                "&" => Conj(BTreeMap::new()),
-                _ => panic!()
-            }
-        });
-    }
-    
-    let mut links = BTreeMap::new();
-    for (name,suivs) in temp.into_iter() {
-        let mut l = vec![];
-        for n in suivs.split(", ") {
-            if !mods.contains_key(n) {
-                mods.insert(n.to_string(),Blank);
-            }
-            l.push(n.to_string());
-            mods.get_mut(n).unwrap().add_prec(name.clone());
-        }
-        links.insert(name,l);
-    }
+    let mut grid: Vec<Vec<Case>> = text.iter().map(|s| s.chars().map(|c| match c {
+        '.' => Blank,
+        '#' => Wall,
+        'S' => Step(0),
+        _ => panic!()
+    }).collect()).collect();
     
     
-    let links = links;
-    let mut htot = 0;
-    let mut ltot = 0;
-    
-    let beacon = ["qq","fj","vm","jc"];
-    
-    for push in 0..10000 {
-        let mut process = VecDeque::from([("button".to_string(),Low,"broadcaster".to_string())]);
-        let mut lcount= 0;
-        let mut hcount =0;
-        
-        while let Some((em,sig,rec)) = process.pop_front() {
-            //println!("{} -{:?}-> {}", em,sig,rec);
-            match sig {
-                Low => lcount+=1,
-                High => hcount += 1
-            }
-            if beacon.contains(&&em.as_str()) && sig==Low {
-                println!("{} {}",em,push+1)
-            }
-            let Some(sig) = mods.get_mut(&rec).unwrap().receive(sig,em) else {continue};
-            let em = rec;
-            for rec in links[&em].iter() {
-                process.push_back((em.clone(),sig,rec.clone()))
+    let mut work = VecDeque::new();
+    for i in 0..grid.len() {
+        for j in 0..grid[i].len() {
+            if grid[i][j] == Step(0) {
+                work.push_back((i,j))
             }
         }
-        ltot+=lcount;
-        htot+=hcount;
+    }
+    
+    while let Some((i,j)) = work.pop_front() {
+        let Step(d) = grid[i][j] else {
+            panic!("Step from unreached case")
+        };
+        if d < NBSTEP {
+            for (i,j) in next_steps(&grid,i,j).into_iter() {
+                if grid[i][j] == Blank {
+                    grid[i][j] = Step(d+1);
+                    work.push_back((i,j));
+                }
+            }
+        }
+    }
+    
+    let parity = NBSTEP%2;
+    for l in grid.into_iter() {
+        for c in l.into_iter() {
+            if let Step(d) = c {
+                if d%2 == parity {
+                    total+=1;
+                }
+            }
+        }
     }
     
     
-    println!("{}", htot*ltot)
+    println!("{}", total)
 }
