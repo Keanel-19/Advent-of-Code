@@ -1,6 +1,6 @@
 use std::fs::read_to_string;
-use std::collections::VecDeque;
-//use regex::Regex;
+use std::collections::BTreeSet;
+use regex::Regex;
 
 fn read_input() -> Vec<String> {
     read_to_string("input")
@@ -10,152 +10,101 @@ fn read_input() -> Vec<String> {
        .collect()
 }
 
-#[derive(Clone,Copy,Debug,Eq,PartialEq)]
-enum Case {
-    Wall,
-    Blank,
-    Step(u32)
-}
-use Case::{Wall,Blank,Step};
-
-fn next_steps(g: &Vec<Vec<Case>>, i: usize, j: usize) -> Vec<(usize,usize)> {
-    let mut rep = vec!();
-    
-    if 0 < i {
-        rep.push((i-1,j))
-    }
-    if 0 < j {
-        rep.push((i,j-1))
-    }
-    if i+1 < g.len() {
-        rep.push((i+1,j))
-    }
-    if j+1 < g[0].len() {
-        rep.push((i,j+1))
-    }
-    rep
+#[derive(Clone,Copy,Debug)]
+struct Coord{
+    x: usize,
+    y: usize,
+    z: usize
 }
 
-/*
-fn next_steps_wrap(g: &Vec<Vec<Case>>, i: usize, j: usize) -> Vec<(usize,usize)> {
-    let mut rep = vec!();
-    
-    if 0 < i {
-        rep.push((i-1,j))
-    } else {
-        rep.push((g.len()-1,j))
-    }
-    if 0 < j {
-        rep.push((i,j-1))
-    } else {
-        rep.push((i,g[0].len()-1))
-    }
-    if i+1 < g.len() {
-        rep.push((i+1,j))
-    } else {
-        rep.push((0,j))
-    }
-    if j+1 < g[0].len() {
-        rep.push((i,j+1))
-    } else {
-        rep.push((i,0))
-    }
-    rep
-}*/
-
-const NBSTEP:u32 = 26501365;
+#[derive(Clone,Copy,Debug)]
+struct Brick(Coord,Coord);
 
 fn main(){
     let mut total = 0;
     let text = read_input();
-    //let reg = Regex::new(r"^([%&]?)(\w+) -> (.+)$").unwrap();
+    let reg = Regex::new(r"^(\d+),(\d+),(\d+)~(\d+),(\d+),(\d+)$").unwrap();
     
-    let init_grid: Vec<Vec<Case>> = text.iter().map(|s| s.chars().map(|c| match c {
-        '.' => Blank,
-        '#' => Wall,
-        'S' => Step(0),
-        _ => panic!()
-    }).collect()).collect();
-    let ilen = init_grid.len();
-    let jlen = init_grid[0].len();
-    
-    let mul = 5;
-    let mut grid = vec![vec![Blank;jlen*mul];ilen*mul];
-    
-    for i in 0..grid.len() {
-        for j in 0..grid[0].len() {
-            let u = i%ilen;
-            let v = j%jlen;
-            if init_grid[u][v] == Wall {
-                grid[i][j]=Wall
-            }
-        }
-    }
-    
-    let mut work = VecDeque::new();
-    for i in 0..init_grid.len() {
-        for j in 0..init_grid[i].len() {
-            if init_grid[i][j] == Step(0) {
-                let i = init_grid.len()*(mul/2)+i;
-                let j = init_grid[0].len()*(mul/2)+j;
-                grid[i][j] = Step(0);
-                work.push_back((i,j));
-            }
-        }
-    }
-    
-    let k = NBSTEP/ilen as u32;
-    let r = NBSTEP%ilen as u32;
-    
-    let max_step = 1+r+2*ilen as u32;
-    while let Some((i,j)) = work.pop_front() {
-        let Step(d) = grid[i][j] else {
-            panic!("Step from unreached case")
+    let mut all_b = vec![];
+    for line in text.iter() {
+        let cap = reg.captures(line).unwrap();
+        let c1 = Coord{
+            x: cap[1].parse().unwrap(),
+            y: cap[2].parse().unwrap(),
+            z: cap[3].parse().unwrap(),
         };
-        if d < max_step {
-            for (i,j) in next_steps(&grid,i,j).into_iter() {
-                if grid[i][j] == Blank {
-                    grid[i][j] = Step(d+1);
-                    work.push_back((i,j));
+        let c2 = Coord{
+            x: cap[4].parse().unwrap(),
+            y: cap[5].parse().unwrap(),
+            z: cap[6].parse().unwrap(),
+        };
+        if c2.z<c1.z {
+            all_b.push(Brick(c2,c1));
+        } else {
+            all_b.push(Brick(c1,c2));
+        }
+    }
+    
+    all_b.sort_by(|a,b| a.0.z.cmp(&b.0.z));
+    let mut up_b = vec![BTreeSet::new();all_b.len()];
+    let mut down_b = vec![BTreeSet::new();all_b.len()];
+    
+    
+    let xmax = all_b.iter().map(|b| if b.0.x < b.1.x {b.1.x} else {b.0.x}).max().unwrap();
+    let ymax = all_b.iter().map(|b| if b.0.y < b.1.y {b.1.y} else {b.0.y}).max().unwrap();
+    println!("{} {}",xmax, ymax);
+    
+    let mut gheight: Vec<Vec<usize>> = vec![vec![0;ymax+1];xmax+1];
+    let mut gbrick: Vec<Vec<Option<usize>>> = vec![vec![None;ymax+1];xmax+1];
+    
+    for b in 0..all_b.len() {
+        let Brick(u,v) = all_b[b];
+        let rangex = if u.x<v.x {u.x..v.x+1} else {v.x..u.x+1};
+        let rangey = if u.y<v.y {u.y..v.y+1} else {v.y..u.y+1};
+        
+        let mut zmax = 0;
+        for i in rangex.clone() {
+            for j in rangey.clone() {
+                if zmax < gheight[i][j] {
+                    zmax = gheight[i][j];
                 }
+            }
+        }
+        
+        let newz = zmax + v.z-u.z+1;
+        for i in rangex.clone() {
+            for j in rangey.clone() {
+                if gheight[i][j] == zmax {
+                    if let Some(b2) = gbrick[i][j] {
+                        up_b[b2].insert(b);
+                        down_b[b].insert(b2);
+                    }
+                }
+                gheight[i][j] = newz;
+                gbrick[i][j] = Some(b);
             }
         }
     }
     
-    let mut r2ntot = 0;
-    let mut rntot = 0;
-    let mut rtot = 0;
-    
-    let n = ilen as u32;
-    let parity = NBSTEP%2;
-    for l in grid.into_iter() {
-        for c in l.into_iter() {
-            if let Step(d) = c {
-                if d%2 == parity {
-                    total+=1;
-                }
-                    if d%2==(r+2*n)%2 && d <= r+2*n {
-                        r2ntot+=1;
-                    }
-                    if d%2==(r+n)%2 && d <= r+n {
-                        rntot+=1;
-                    }
-                    if d%2==(r)%2 && d <= r {
-                        rtot+=1;
-                    }
-            }
+    for b in 0..all_b.len() {
+        if up_b[b].len() == 0 {
+            total += 1;
+        } else if up_b[b].iter().all(|b| down_b[*b].len() > 1) {
+            total += 1;
         }
     }
     
-    let r = r as u128;
-    let k = k as u128;
-    let n = ilen as u128;
-    let b0 = rtot;
-    let b1 = rntot - rtot;
-    let b2 = r2ntot-rntot;
+    let mut total2 = 0;
+    for b in 0..all_b.len() {
+        let mut state = vec![false;all_b.len()];
+        state[b] = true;
+        for b in 0..all_b.len() {
+            state[b] = state[b] || down_b[b].len()>0 && down_b[b].iter().all(|b| state[*b]);
+        }
+        //println!("{:?}", state);
+        total2 += state.into_iter().filter(|s| *s).count() -1;
+    }
     
-    println!("k {}",k);
-    println!("{} {} {}",r2ntot,rntot,rtot);
-    println!("{}", b0 + b1*k + (k*(k-1)/2)*(b2-b1));
-    println!("{}", total)
+    println!("{}", total);
+    println!("{}", total2)
 }
